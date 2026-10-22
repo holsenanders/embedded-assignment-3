@@ -12,13 +12,12 @@
 #include <time.h>
 #include <poll.h>
 #include <stdint.h>
-// Bit shifting not sure why we do this, but we will find out
 // The game state can be used to detect what happens on the playfield
-#define GAMEOVER 0 // 0
-#define ACTIVE (1 << 0) // 0
-#define ROW_CLEAR (1 << 1) // 2
-#define TILE_ADDED (1 << 2) // 4
-#define PAUSED (1 << 3) // 8
+#define GAMEOVER 0
+#define ACTIVE (1 << 0)
+#define ROW_CLEAR (1 << 1)
+#define TILE_ADDED (1 << 2)
+#define PAUSED (1 << 3)
 
 // If you extend this structure, either avoid pointers or adjust
 // the game logic allocate/deallocate and reset the memory
@@ -194,8 +193,15 @@ int readSenseHatJoystick()
 {
     struct input_event event_from_joystick;
     while (read(sense_hat_joystick_file_descriptor, &event_from_joystick, sizeof(event_from_joystick)) == sizeof(event_from_joystick)) {
-        if (event_from_joystick.type == EV_KEY && (event_from_joystick.value == 1 || event_from_joystick.value == 2)) {
-            return event_from_joystick.code;
+        if (event_from_joystick.type == EV_KEY) {
+            // Value == 1 is the initial press down
+            if (event_from_joystick.value == 1) {
+                return event_from_joystick.code;
+            }
+            // Value 2 is holding the button so we exclude KEY_UP which pauses the game
+            if (event_from_joystick.value == 2 && event_from_joystick.code != KEY_UP) {
+                return  event_from_joystick.code;
+            }
         }
     }
     return 0;
@@ -634,7 +640,7 @@ int main(int argc, char **argv)
             // reading the inputs from stdin. However, we expect you to read the inputs directly
             // from the input device and not from stdin (you should implement the readSenseHatJoystick
             // method).
-            key = readKeyboard(); // TODO remeber to remove this
+            //key = readKeyboard();
         }
         if (key == KEY_ENTER)
             break;
