@@ -162,12 +162,8 @@ void renderSenseHatMatrix(bool const playfieldChanged)
 
     for (int y = 0; y < game.grid.y; y++) {
         for (int x = 0; x < game.grid.x; x++) {
-            bool occupied = game.playfield[y][x].occupied;
-            if (occupied) {
-                sense_hat_frame_buffer[y * game.grid.x + x] = 1;
-            } else {
-                sense_hat_frame_buffer[y * game.grid.x + x] = 0;
-            }
+            tile const t = game.playfield[y][x];
+            sense_hat_frame_buffer[y * game.grid.x + x] = t.occupied ? t.color : 0;
         }
     }
 }
