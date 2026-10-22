@@ -78,37 +78,40 @@ uint16_t yellow = ((30 << 11) | (63 << 5) | 0);
 //holder for the pi sense frame buffer id
 char pi_sense_id[] = "RPi-Sense FB";
 struct fb_fix_screeninfo sense_hat_fb_info;
-int sense_hat_file_descriptor = -1;
+int sense_hat_frame_buffer_file_descriptor = -1;
 int frame_buffer_size;
 uint16_t *sense_hat_frame_buffer;
+
+//Joystick global vars
+char joystick_id[] = "Raspberry Pi Sense HAT Joystick";
+int sense_hat_joystick_file_descriptor = -1;
 
 // This function is called on the start of your application
 // Here you can initialize what ever you need for your task
 // return false if something fails, else true
-bool initializeSenseHat()
-{
+bool initializeSenseHat() {
     struct fb_fix_screeninfo scoped_fb_info;
 
-    // Find the pi_sense_hat
+    // Find the pi sense hat frame buffer
     for (int i = 0; i < 32; i++){
         char path_to_frame_buffer[32];
         // concat the path to the possible frame buffer
         snprintf(path_to_frame_buffer, sizeof(path_to_frame_buffer), "/dev/fb%d", i);
 
-        // open returns an int representing success or not, we need read write later for mmap
-        int file_descriptor_to_check = open(path_to_frame_buffer, O_RDWR);
+        // open returns an int representing success or not, we need to read and write to this device
+        int file_descriptor_to_check_frame_buffer = open(path_to_frame_buffer, O_RDWR);
 
-        if (file_descriptor_to_check == -1) {
-            close(file_descriptor_to_check);
+        if (file_descriptor_to_check_frame_buffer == -1) {
+            close(file_descriptor_to_check_frame_buffer);
             continue;
         }
 
         // Get the info for the driver and put it in the address of scoped_fb_info
-        ioctl(file_descriptor_to_check, FBIOGET_FSCREENINFO, &scoped_fb_info);
+        ioctl(file_descriptor_to_check_frame_buffer, FBIOGET_FSCREENINFO, &scoped_fb_info);
 
         if (strcmp(scoped_fb_info.id, pi_sense_id) == 0) {
             sense_hat_fb_info = scoped_fb_info;
-            sense_hat_file_descriptor = file_descriptor_to_check;
+            sense_hat_frame_buffer_file_descriptor = file_descriptor_to_check_frame_buffer;
             frame_buffer_size = sense_hat_fb_info.smem_len;
 
             // Map from virtual to physical address
@@ -117,18 +120,45 @@ bool initializeSenseHat()
                 frame_buffer_size,
                 PROT_READ | PROT_WRITE,
                 MAP_SHARED,
-                sense_hat_file_descriptor,
+                sense_hat_frame_buffer_file_descriptor,
                 0);
 
             // If sense hat map fail we free the buffer and close the file descriptor
             if (sense_hat_frame_buffer == MAP_FAILED) {
                 sense_hat_frame_buffer = NULL;
-                close(file_descriptor_to_check);
-                sense_hat_file_descriptor = -1;
+                close(file_descriptor_to_check_frame_buffer);
+                sense_hat_frame_buffer_file_descriptor = -1;
                 return false;
             }
+            // If mapping is successful we break.
+            break;
+        }
+        // close the file descriptors that are non-matching
+        close(file_descriptor_to_check_frame_buffer);
+    }
+    // If the frame buffer is a null pointer we return early.
+    if (sense_hat_frame_buffer ==  NULL) {
+        return false;
+    }
+
+    for (int i = 0; i < 32; i++) {
+        char path_to_joystick[32];
+        snprintf(path_to_joystick, sizeof(path_to_joystick), "/dev/input/event%d", i);
+
+        int file_descriptor_to_check_joystick = open(path_to_joystick, O_RDONLY | O_NONBLOCK);
+
+        if (file_descriptor_to_check_joystick == -1) {
+            close(file_descriptor_to_check_joystick);
+            continue;
+        }
+
+        char input_device_name_to_check[256] = "Unknown";
+        if (ioctl(file_descriptor_to_check_joystick, EVIOCGNAME(sizeof(input_device_name_to_check)), input_device_name_to_check) != -1
+            && strcmp(input_device_name_to_check, joystick_id) == 0) {
+            sense_hat_joystick_file_descriptor = file_descriptor_to_check_joystick;
             return true;
         }
+        close(file_descriptor_to_check_joystick);
     }
     return false;
 }
@@ -144,8 +174,13 @@ void freeSenseHat()
     }
 
     // Close the file descriptor if open returned anything other than -1 indicating an error
-    if (sense_hat_file_descriptor != -1) {
-        close(sense_hat_file_descriptor);
+    if (sense_hat_frame_buffer_file_descriptor != -1) {
+        close(sense_hat_frame_buffer_file_descriptor);
+    }
+
+    // Close the joystick file descriptor in the way as the frame buffer file descriptor
+    if (sense_hat_joystick_file_descriptor != -1) {
+        close(sense_hat_joystick_file_descriptor);
     }
 
 }
@@ -157,6 +192,12 @@ void freeSenseHat()
 // !!! when nothing was pressed you MUST return 0 !!!
 int readSenseHatJoystick()
 {
+    struct input_event event_from_joystick;
+    while (read(sense_hat_joystick_file_descriptor, &event_from_joystick, sizeof(event_from_joystick)) == sizeof(event_from_joystick)) {
+        if (event_from_joystick.type == EV_KEY && (event_from_joystick.value == 1 || event_from_joystick.value == 2)) {
+            return event_from_joystick.code;
+        }
+    }
     return 0;
 }
 

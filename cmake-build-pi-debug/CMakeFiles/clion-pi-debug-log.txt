@@ -1,4 +1,10 @@
 /usr/bin/cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" -S /tmp/tmp.gWz8JZfCP9/embedded-assignment-3 -B /tmp/tmp.gWz8JZfCP9/embedded-assignment-3/cmake-build-pi-debug
--- Configuring done (0.0s)
+-- The C compiler identification is GNU 14.2.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Configuring done (0.7s)
 -- Generating done (0.0s)
 -- Build files have been written to: /tmp/tmp.gWz8JZfCP9/embedded-assignment-3/cmake-build-pi-debug
