@@ -1,0 +1,3 @@
+/tmp/tmp.gWz8JZfCP9/embedded-assignment-3/cmake-build-pi-debug/CMakeFiles/stetris.dir
+/tmp/tmp.gWz8JZfCP9/embedded-assignment-3/cmake-build-pi-debug/CMakeFiles/edit_cache.dir
+/tmp/tmp.gWz8JZfCP9/embedded-assignment-3/cmake-build-pi-debug/CMakeFiles/rebuild_cache.dir

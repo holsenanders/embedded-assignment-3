@@ -2,25 +2,30 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <termios.h>
-#include <sys/select.h>
+#include <sys/ioctl.h>
 #include <linux/input.h>
+#include <fcntl.h>
+#include <linux//fb.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <time.h>
 #include <poll.h>
-
+#include <stdint.h>
+// Bit shifting not sure why we do this, but we will find out
 // The game state can be used to detect what happens on the playfield
-#define GAMEOVER 0
-#define ACTIVE (1 << 0)
-#define ROW_CLEAR (1 << 1)
-#define TILE_ADDED (1 << 2)
-#define PAUSED (1 << 3)
+#define GAMEOVER 0 // 0
+#define ACTIVE (1 << 0) // 0
+#define ROW_CLEAR (1 << 1) // 2
+#define TILE_ADDED (1 << 2) // 4
+#define PAUSED (1 << 3) // 8
 
 // If you extend this structure, either avoid pointers or adjust
 // the game logic allocate/deallocate and reset the memory
 typedef struct
 {
     bool occupied;
+    uint16_t color;
 } tile;
 
 typedef struct
@@ -58,24 +63,88 @@ gameConfig game = {
     .rowsPerLevel = 2,
     .initNextGameTick = 50,
 };
+// Game colors
+uint16_t red = ((31 << 11) | (0 << 5) | 0);
+uint16_t blue = ((0 << 11) | (0 << 5) | 31);
+
+//holder for the pi sense frame buffer id
+char pi_sense_id[] = "RPi-Sense FB";
+struct fb_fix_screeninfo sense_hat_fb_info;
+int sense_hat_file_descriptor = -1;
+int frame_buffer_size;
+uint16_t *sense_hat_frame_buffer;
 
 // This function is called on the start of your application
 // Here you can initialize what ever you need for your task
 // return false if something fails, else true
 bool initializeSenseHat()
 {
-    return true;
+    struct fb_fix_screeninfo scoped_fb_info;
+
+    // Find the pi_sense_hat
+    for (int i = 0; i < 32; i++){
+        char path_to_frame_buffer[32];
+        // concat the path to the possible frame buffer
+        snprintf(path_to_frame_buffer, sizeof(path_to_frame_buffer), "/dev/fb%d", i);
+
+        // open returns an int representing success or not, we need read write later for mmap
+        int file_descriptor_to_check = open(path_to_frame_buffer, O_RDWR);
+
+        if (file_descriptor_to_check == -1) {
+            close(file_descriptor_to_check);
+            continue;
+        }
+
+        // Get the info for the driver and put it in the address of scoped_fb_info
+        ioctl(file_descriptor_to_check, FBIOGET_FSCREENINFO, &scoped_fb_info);
+
+        if (strcmp(scoped_fb_info.id, pi_sense_id) == 0) {
+            sense_hat_fb_info = scoped_fb_info;
+            sense_hat_file_descriptor = file_descriptor_to_check;
+            frame_buffer_size = sense_hat_fb_info.smem_len;
+
+            // Map from virtual to physical address
+            sense_hat_frame_buffer = mmap(
+                NULL,
+                frame_buffer_size,
+                PROT_READ | PROT_WRITE,
+                MAP_SHARED,
+                sense_hat_file_descriptor,
+                0);
+
+            // If sense hat map fail we free the buffer and close the file descriptor
+            if (sense_hat_frame_buffer == MAP_FAILED) {
+                sense_hat_frame_buffer = NULL;
+                close(file_descriptor_to_check);
+                sense_hat_file_descriptor = -1;
+                return false;
+            }
+            return true;
+        }
+    }
+    return false;
 }
 
 // This function is called when the application exits
 // Here you can free up everything that you might have opened/allocated
 void freeSenseHat()
 {
+    // turn off all LEDs
+    if (sense_hat_frame_buffer) {
+        memset(sense_hat_frame_buffer, 0, frame_buffer_size);
+        munmap(sense_hat_frame_buffer, frame_buffer_size);
+    }
+
+    // Close the file descriptor if open returned anything other than -1 indicating an error
+    if (sense_hat_file_descriptor != -1) {
+        close(sense_hat_file_descriptor);
+    }
+
 }
 
 // This function should return the key that corresponds to the joystick press
 // KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, with the respective direction
-// and KEY_ENTER, when the the joystick is pressed
+// and KEY_ENTER, when the joystick is pressed
 // KEY_UP toggles pause (handled by the game logic)
 // !!! when nothing was pressed you MUST return 0 !!!
 int readSenseHatJoystick()
@@ -88,7 +157,19 @@ int readSenseHatJoystick()
 // has changed the playfield
 void renderSenseHatMatrix(bool const playfieldChanged)
 {
-    (void)playfieldChanged;
+    if (!playfieldChanged)
+        return;
+
+    for (int y = 0; y < game.grid.y; y++) {
+        for (int x = 0; x < game.grid.x; x++) {
+            bool occupied = game.playfield[y][x].occupied;
+            if (occupied) {
+                sense_hat_frame_buffer[y * game.grid.x + x] = 1;
+            } else {
+                sense_hat_frame_buffer[y * game.grid.x + x] = 0;
+            }
+        }
+    }
 }
 
 // The game logic uses only the following functions to interact with the playfield.
@@ -98,6 +179,9 @@ void renderSenseHatMatrix(bool const playfieldChanged)
 static inline void newTile(coord const target)
 {
     game.playfield[target.y][target.x].occupied = true;
+
+    // Added a new color attribute here
+    game.playfield[target.y][target.x].color = red;
 }
 
 static inline void copyTile(coord const to, coord const from)
@@ -483,7 +567,7 @@ int main(int argc, char **argv)
             // reading the inputs from stdin. However, we expect you to read the inputs directly
             // from the input device and not from stdin (you should implement the readSenseHatJoystick
             // method).
-            // key = readKeyboard();
+            key = readKeyboard(); // TODO remeber to remove this
         }
         if (key == KEY_ENTER)
             break;

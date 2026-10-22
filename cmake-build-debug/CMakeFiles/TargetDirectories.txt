@@ -1,0 +1,3 @@
+/Users/andersnikolaiholsen/Documents/Autumn2026/LowLevel/embedded-assignment-3/cmake-build-debug/CMakeFiles/stetris.dir
+/Users/andersnikolaiholsen/Documents/Autumn2026/LowLevel/embedded-assignment-3/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/andersnikolaiholsen/Documents/Autumn2026/LowLevel/embedded-assignment-3/cmake-build-debug/CMakeFiles/rebuild_cache.dir

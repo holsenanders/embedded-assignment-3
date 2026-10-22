@@ -1,0 +1,4 @@
+/usr/bin/cmake -DCMAKE_BUILD_TYPE=Release -G "Unix Makefiles" -S /tmp/tmp.gWz8JZfCP9/embedded-assignment-3 -B /tmp/tmp.gWz8JZfCP9/embedded-assignment-3/cmake-build-pi-debug
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /tmp/tmp.gWz8JZfCP9/embedded-assignment-3/cmake-build-pi-debug
