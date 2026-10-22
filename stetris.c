@@ -208,7 +208,6 @@ static inline void newTile(coord const target)
             current_color = 0;
             break;
     }
-    game.playfield[target.y][target.x].color = red;
 }
 
 static inline void copyTile(coord const to, coord const from)
