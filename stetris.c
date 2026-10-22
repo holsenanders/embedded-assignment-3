@@ -63,9 +63,17 @@ gameConfig game = {
     .rowsPerLevel = 2,
     .initNextGameTick = 50,
 };
-// Game colors
+
+
+// current color;
+int current_color = 0;
+
+// Game colors found through a color picker
 uint16_t red = ((31 << 11) | (0 << 5) | 0);
 uint16_t blue = ((0 << 11) | (0 << 5) | 31);
+uint16_t green = ((0 << 11) | (63 << 5) | 0);
+uint16_t pink = ((31 << 11) | (0 << 5) | 25);
+uint16_t yellow = ((30 << 11) | (63 << 5) | 0);
 
 //holder for the pi sense frame buffer id
 char pi_sense_id[] = "RPi-Sense FB";
@@ -163,6 +171,8 @@ void renderSenseHatMatrix(bool const playfieldChanged)
     for (int y = 0; y < game.grid.y; y++) {
         for (int x = 0; x < game.grid.x; x++) {
             tile const t = game.playfield[y][x];
+            // Since frame buffer is flat we calculate the x and y coords by multiplying the y coord with the with and
+            // add x as offset. We set the color defined in struct if occupied, 0 if not.
             sense_hat_frame_buffer[y * game.grid.x + x] = t.occupied ? t.color : 0;
         }
     }
@@ -176,7 +186,28 @@ static inline void newTile(coord const target)
 {
     game.playfield[target.y][target.x].occupied = true;
 
-    // Added a new color attribute here
+    switch (current_color) {
+        case 0:
+            game.playfield[target.y][target.x].color = red;
+            current_color++;
+            break;
+        case 1:
+            game.playfield[target.y][target.x].color = blue;
+            current_color++;
+            break;
+        case 2:
+            game.playfield[target.y][target.x].color = green;
+            current_color++;
+            break;
+        case 3:
+            game.playfield[target.y][target.x].color = pink;
+            current_color++;
+            break;
+        case 4:
+            game.playfield[target.y][target.x].color = yellow;
+            current_color = 0;
+            break;
+    }
     game.playfield[target.y][target.x].color = red;
 }
 
