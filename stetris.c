@@ -12,6 +12,7 @@
 #include <time.h>
 #include <poll.h>
 #include <stdint.h>
+#include <sys/time.h>
 // The game state can be used to detect what happens on the playfield
 #define GAMEOVER 0
 #define ACTIVE (1 << 0)
@@ -76,13 +77,19 @@ uint16_t yellow = ((30 << 11) | (63 << 5) | 0);
 
 //holder for the pi sense frame buffer id
 char pi_sense_id[] = "RPi-Sense FB";
+// Struct returned from the iotc call containing the id of the device
 struct fb_fix_screeninfo sense_hat_fb_info;
+// File descriptor for the buffer
 int sense_hat_frame_buffer_file_descriptor = -1;
+//size of the buffer, global because we need to unmap it when we are done
 int frame_buffer_size;
+// The actual frame buffer uint16_t because the color depth is that
 uint16_t *sense_hat_frame_buffer;
 
 //Joystick global vars
+// id to find the device through the device search
 char joystick_id[] = "Raspberry Pi Sense HAT Joystick";
+// File descriptor for the joystick
 int sense_hat_joystick_file_descriptor = -1;
 
 // This function is called on the start of your application
@@ -94,7 +101,7 @@ bool initializeSenseHat() {
     // Find the pi sense hat frame buffer
     for (int i = 0; i < 32; i++){
         char path_to_frame_buffer[32];
-        // concat the path to the possible frame buffer
+        // concat the path to the possible frame buffer "/dev/fb is where the device files for the frame buffers are located"
         snprintf(path_to_frame_buffer, sizeof(path_to_frame_buffer), "/dev/fb%d", i);
 
         // open returns an int representing success or not, we need to read and write to this device
@@ -108,6 +115,7 @@ bool initializeSenseHat() {
         // Get the info for the driver and put it in the address of scoped_fb_info
         ioctl(file_descriptor_to_check_frame_buffer, FBIOGET_FSCREENINFO, &scoped_fb_info);
 
+        // Is the frame buffer we found correct? If yes then assign to global vars
         if (strcmp(scoped_fb_info.id, pi_sense_id) == 0) {
             sense_hat_fb_info = scoped_fb_info;
             sense_hat_frame_buffer_file_descriptor = file_descriptor_to_check_frame_buffer;
@@ -140,23 +148,31 @@ bool initializeSenseHat() {
         return false;
     }
 
+    // Do the same thing as the frame buffer to find the correct device
     for (int i = 0; i < 32; i++) {
         char path_to_joystick[32];
+        // Point to the files for input events
         snprintf(path_to_joystick, sizeof(path_to_joystick), "/dev/input/event%d", i);
 
+        // File to check, we only need to read and it should not block
         int file_descriptor_to_check_joystick = open(path_to_joystick, O_RDONLY | O_NONBLOCK);
 
+        // same logic as frame buffer
         if (file_descriptor_to_check_joystick == -1) {
             close(file_descriptor_to_check_joystick);
             continue;
         }
 
+        // The input name that needs to be checked. Set it to 256 array length did not meet any issues.
         char input_device_name_to_check[256] = "Unknown";
+
+        //We know that the sense hat has a name for it device so we check using the EVIOCGNAME request to get device name
         if (ioctl(file_descriptor_to_check_joystick, EVIOCGNAME(sizeof(input_device_name_to_check)), input_device_name_to_check) != -1
             && strcmp(input_device_name_to_check, joystick_id) == 0) {
             sense_hat_joystick_file_descriptor = file_descriptor_to_check_joystick;
             return true;
         }
+        // Close the file descriptor if the name did not match
         close(file_descriptor_to_check_joystick);
     }
     return false;
@@ -169,6 +185,7 @@ void freeSenseHat()
     // turn off all LEDs
     if (sense_hat_frame_buffer) {
         memset(sense_hat_frame_buffer, 0, frame_buffer_size);
+        // Unmap
         munmap(sense_hat_frame_buffer, frame_buffer_size);
     }
 
@@ -198,7 +215,7 @@ int readSenseHatJoystick()
             if (event_from_joystick.value == 1) {
                 return event_from_joystick.code;
             }
-            // Value 2 is holding the button so we exclude KEY_UP which pauses the game
+            // Value 2 is holding the button so we exclude KEY_UP which pauses the game, this was a bit glitchy if i am honest
             if (event_from_joystick.value == 2 && event_from_joystick.code != KEY_UP) {
                 return  event_from_joystick.code;
             }
@@ -212,6 +229,7 @@ int readSenseHatJoystick()
 // has changed the playfield
 void renderSenseHatMatrix(bool const playfieldChanged)
 {
+    // Early return if play field did not change
     if (!playfieldChanged)
         return;
 
